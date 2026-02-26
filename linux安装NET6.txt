@@ -1,0 +1,14 @@
+yum install
+
+yum install net-tools
+
+注册镜像地址
+sudo rpm -Uvh http://packages.microsoft.com/config/rhel/7/packages-microsoft-prod.rpm
+
+安装 NET 6 SDK
+sudo yum update
+
+sudo yum install dotnet-sdk-6.0
+
+关闭防火墙
+systemctl disable firewalld 
