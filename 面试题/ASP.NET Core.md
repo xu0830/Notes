@@ -60,7 +60,9 @@ app.UseResponseCaching();
 - DI 只负责释放其创建的对象实例，如果这个对象是自己创建出来并放到容器里的，容器不负责释放这个对象
 - DI 在容器或子容器释放时，才会释放由其创建的对象实例
 
-**避免在根容器获取实现了 IDisposable 接口的瞬时服务**
+## app.Services 通常指的是根容器
+
+**避免在根容器获取实现了 IDisposable 接口的瞬时服务，（单例服务不需要考虑）**
 
 **避免手动创建实现了 IDisposable 的服务，然后塞到容器里面，应该用容器来管理其生命周期**
 
@@ -76,10 +78,42 @@ public void Configure(IApplicationBuilder app)
 	// 从根容器获取的瞬时服务，对象无法回收，直到应用结束
 }
 
+//  推荐代码1
 var service = HttpContext.RequestServices.CreateScope().ServiceProvider.GetService<IService>();
+
+//  推荐代码2
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var myService = services.GetRequiredService<IMyService>();
+    // 执行逻辑
+} // scope 释放后，Scoped 服务会被正确销毁
+
 ```
 
-### 需要引入第三方的容器组件
+## 在 Singleton服务（如后台任务BackgroundService）中
+
+不能直接注入 Scoped 服务，必须注入 IServiceScopeFactory
+
+直接将 Scoped 服务注入到 Singleton 中，这个 Scoped 服务就会被 Singleton “捕获”
+意味着它将永远无法被正常销毁，导致其生命周期被迫延长到与 Singleton 一致，这被称为隐性内存泄漏
+
+```
+public class MyBgTask : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    public MyBgTask(IServiceScopeFactory scopeFactory) => _scopeFactory = scopeFactory;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyDbContext>();
+        // ...
+    }
+}
+```
+
+## 需要引入第三方的容器组件
 
 - 基于名称的注入，名称区分多实现
 
